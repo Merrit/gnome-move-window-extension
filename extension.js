@@ -16,8 +16,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-/* exported init */
-
 const GETTEXT_DOMAIN = 'move-window-to-next-monitor';
 
 const { GObject, Meta, St } = imports.gi;
@@ -37,29 +35,26 @@ var KeyboardShortcuts = class KeyboardShortcuts {
     constructor(settings) {
         this._grabbers = {};
 
-
         global.display.connect('accelerator-activated', (display, action, deviceId, timestamp) => {
-            log("Accelerator Activated: [display=%s, action=%s, deviceId=%s, timestamp=%s]",
-                display, action, deviceId, timestamp)
             this._onAccelerator(action)
         });
     }
 
     listenFor(accelerator, callback) {
-        log('Trying to listen for hot key [accelerator=%s]', accelerator);
+        log('Trying to listen for hot key ', accelerator);
         let action = global.display.grab_accelerator(accelerator, 0);
 
         if (action == Meta.KeyBindingAction.NONE) {
-            this.logger.error('Unable to grab accelerator [%s]', accelerator);
+            log('Unable to grab accelerator ', accelerator);
             return;
         }
 
-        log('Grabbed accelerator [action={}]', action);
+        log('Grabbed accelerator ', action);
         let name = Meta.external_binding_name_for_action(action);
-        log('Received binding name for action [name=%s, action=%s]',
+        log('Received binding name for action ',
             name, action)
 
-        log('Requesting WM to allow binding [name=%s]', name)
+        log('Requesting WM to allow binding ', name)
         Main.wm.allowKeybinding(name, Shell.ActionMode.ALL)
 
         this._grabbers[action] = {
@@ -75,28 +70,25 @@ var KeyboardShortcuts = class KeyboardShortcuts {
         if (grabber) {
             grabber.callback();
         } else {
-            log('No listeners [action=%s]', action);
+            log('No listeners ', action);
         }
     }
 }
 
-const Indicator = GObject.registerClass(
-    class Indicator extends PanelMenu.Button {
-        _init() {
-            super._init(0.0, _('My Shiny Indicator'));
-
-            this.add_child(new St.Icon({
-                icon_name: 'face-smile-symbolic',
-                style_class: 'system-status-icon',
-            }));
-
-            let item = new PopupMenu.PopupMenuItem(_('Show Notification'));
-            item.connect('activate', () => {
-                Main.notify(_('Whatʼs up, folks?'));
-            });
-            this.menu.addMenuItem(item);
+var Mover = class WindowMover {
+    moveRight() {
+        let focusedWindow = global.display.focus_window;
+        if (focusedWindow == null) {
+            log('Unable to find focused window.');
+            return;
         }
-    });
+        let focusedWindowMonitor = focusedWindow.get_monitor();
+        let nextMonitor = global.display.get_monitor_neighbor_index(focusedWindowMonitor, Meta.DisplayDirection.RIGHT);
+        let isOnLastMonitor = nextMonitor < 0;
+        var targetMonitor = (isOnLastMonitor) ? 0 : nextMonitor;
+        focusedWindow.move_to_monitor(targetMonitor);
+    }
+}
 
 class Extension {
     constructor(uuid) {
@@ -106,47 +98,18 @@ class Extension {
     }
 
     enable() {
+        // Enable keyboard shortcut.
+        var windowMover = new Mover();
 
-        this.accel = new KeyboardShortcuts(this.settings);
-        this.accel.listenFor("<super>KP_0", () => {
+        this.nextMonitorHotkey = new KeyboardShortcuts(this.settings);
+        this.nextMonitorHotkey.listenFor("<super>KP_0", () => {
             log("Caught hotkey activation for next monitor.");
+            windowMover.moveRight();
         });
-
-        log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
-        let numberOfMonitors = global.display.get_n_monitors();
-        log(`Number of monitors: ${numberOfMonitors}`);
-        let focusedWindow = global.display.focus_window;
-        if (focusedWindow != null) {
-            log(`Focused window: ${focusedWindow.get_title()}`);
-            let focusedWindowMonitor = focusedWindow.get_monitor();
-            log(`Focused window monitor: ${focusedWindowMonitor}`);
-            let nextMonitor = global.display.get_monitor_neighbor_index(focusedWindowMonitor, Meta.DisplayDirection.RIGHT);
-            log(`nextMonitor: ${nextMonitor}`);
-            let isOnLastMonitor = nextMonitor < 0;
-            log(`isOnLastMonitor: ${isOnLastMonitor}`);
-        }
-        // let display = Meta.Display;
-        // log(`Is wayland compositor: ${Meta.is_wayland_compositor()}`);
-        // log(`focus app?: ${Shell.WindowTracker.get_default().focus_app.get_name()}`);
-        // let windowActors = global.get_window_actors().forEach(function (w) {
-        //     let window = w.get_meta_window();
-        //     log(`Found a window: ${window.get_id()}`);
-        // });
-        // log(`Monitor: ${windowActors}`);
-        // let focusedWindow = global.display.get_focus_window();
-        // log(`focusedWindow: ${focusedWindow}`);
-
-        // let focusedWindowMonitor = focusedWindow.get_monitor();
-        // log(`Active window monitor: ${focusedWindowMonitor}`);
-        // focusedWindow.lower();
-        // focusedWindow.
-        this._indicator = new Indicator();
-        Main.panel.addToStatusArea(this._uuid, this._indicator);
     }
 
     disable() {
-        this._indicator.destroy();
-        this._indicator = null;
+        log('Disabling move to next window');
     }
 }
 

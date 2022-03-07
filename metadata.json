@@ -3,6 +3,6 @@
   "description": "Add a keyboard shortcut to move the active window to the next monitor & cycle back if on the last monitor",
   "uuid": "kmcwilliampublic+gnomemovewindowextension@gmail.com",
   "shell-version": [
-    "41"
+    "40"
   ]
 }
